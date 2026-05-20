@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Child Safety SSH Results Viewer</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header class="header">
+        <h1>Child Safety SSH Benchmark Results</h1>
+        <p class="muted">Static viewer for benchmark outputs.</p>
+      </header>
+
+      <section id="summary" class="card summary-grid"></section>
+
+      <section class="card">
+        <div class="row between">
+          <h2>Risk Summary</h2>
+          <button id="exportCsvBtn" class="btn">Export Filtered CSV</button>
+        </div>
+        <div class="muted small">
+          Click a risk to drill down into matching scenarios.
+        </div>
+        <div id="riskSummary" class="risk-grid"></div>
+      </section>
+
+      <section class="card">
+        <h2>Filters</h2>
+        <div class="filters">
+          <label>
+            <span>Risk category</span>
+            <select id="riskCategoryFilter"></select>
+          </label>
+          <label>
+            <span>Risk</span>
+            <select id="riskFilter"></select>
+          </label>
+          <label>
+            <span>Prompt</span>
+            <select id="promptFilter"></select>
+          </label>
+          <label>
+            <span>Age range</span>
+            <select id="ageRangeFilter"></select>
+          </label>
+          <label>
+            <span>Safety grade</span>
+            <select id="gradeFilter"></select>
+          </label>
+          <label>
+            <span>Search</span>
+            <input id="searchFilter" type="text" placeholder="Title or narrative" />
+          </label>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="row between">
+          <h2>Scenarios</h2>
+          <div id="scenarioCount" class="muted"></div>
+        </div>
+        <div id="scenarioList" class="scenario-list"></div>
+      </section>
+    </main>
+
+    <div id="scenarioModal" class="modal hidden" role="dialog" aria-modal="true">
+      <div class="modal-backdrop" data-close="1"></div>
+      <div class="modal-content">
+        <button id="closeModalBtn" class="modal-close" aria-label="Close">×</button>
+        <h2 id="modalTitle"></h2>
+        <div id="modalMeta" class="muted small"></div>
+
+        <h3>Assessment</h3>
+        <p id="modalAssessment"></p>
+
+        <h3>Scenario Narrative</h3>
+        <p id="modalNarrative" class="pre"></p>
+
+        <h3>Conversation</h3>
+        <div id="modalConversation" class="conversation"></div>
+      </div>
+    </div>
+
+    <script src="./viewer.js"></script>
+  </body>
+</html>
+

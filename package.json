@@ -1,0 +1,40 @@
+{
+  "name": "@korabench/public",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "packageManager": "yarn@4.12.0",
+  "scripts": {
+    "ts": "tsc --build --watch",
+    "tsbuild": "tsc --build",
+    "build:clean": "rm -rf ./build ./packages/*/build",
+    "lint": "eslint .",
+    "pretty": "prettier --check './packages/*/src/**/*.{js,ts,jsx,tsx,json}'",
+    "pretty:write": "prettier --write './packages/*/src/**/*.{js,ts,jsx,tsx,json}'",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "cs-bench": "node --env-file=.env ./packages/cli/build/src/cli.js",
+    "cs-bench:env": "node --env-file=.env ./packages/cli/build/src/cli.js",
+    "run:model": "node ./scripts/run-model-benchmark.mjs",
+    "results-viewer:archive": "cp data/results.json results-viewer/archived-results/ && rm -rf results-viewer/archived-results/testResults && cp -r data/results/testResults results-viewer/archived-results/ && echo Archived to results-viewer/archived-results/",
+    "results-viewer:data": "node ./results-viewer/build-viewer-data.mjs",
+    "results-viewer-next:dev": "npm --prefix ./results-viewer-next run dev",
+    "results-viewer-next:build": "npm --prefix ./results-viewer-next run build"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@typescript-eslint/eslint-plugin": "8.55.0",
+    "@typescript-eslint/parser": "8.55.0",
+    "eslint": "10.0.0",
+    "eslint-plugin-react": "7.37.5",
+    "eslint-plugin-react-hooks": "7.0.1",
+    "globals": "17.3.0",
+    "prettier": "3.8.1",
+    "prettier-plugin-organize-imports": "4.3.0",
+    "prettier-plugin-tailwindcss": "0.7.2",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.55.0",
+    "vitest": "4.0.18"
+  }
+}
