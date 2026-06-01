@@ -30,9 +30,11 @@ function buildRetryOptions(
   };
 }
 
-function isGptModel(modelId: string): boolean {
-  const normalized = modelId.toLowerCase();
-  return normalized.startsWith("openai/gpt-") || normalized === "openai/gpt-4o";
+/** True when the registry slug or provider model id is an OpenAI GPT model. */
+function isGptModel(modelId: string, modelSlug: string): boolean {
+  const id = modelId.toLowerCase();
+  const slug = modelSlug.toLowerCase();
+  return id.includes("gpt") || slug.includes("gpt");
 }
 
 function toOpenAiModelId(modelId: string): string {
@@ -71,7 +73,7 @@ export function createGatewayModel(
 ): Model {
   const config = resolveModelConfig(modelsJsonPath, modelSlug);
   const retryOptions = buildRetryOptions(config.model, options);
-  const isGpt = isGptModel(config.model);
+  const isGpt = isGptModel(config.model, modelSlug);
   const openaiClient = isGpt ? createOpenAiClient() : null;
   const useOpenAiSdk = isGpt && openaiClient !== null;
 
