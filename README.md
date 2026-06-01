@@ -52,7 +52,10 @@ Run the benchmark for leaderboard models:
 ```bash
 yarn run:model <target-model>
 yarn run:model <target-model> [judge-model] [user-model]
+# e.g. yarn run:model grok-4.3 gpt-5.5:high:limited deepseek-v3.2
 ```
+
+Results land under `data/model-results/<target>/`. The script writes `run-meta.json` there immediately (target, judge, user, prompts) so the UI can show run configuration before `results.json` is finished. Completed runs also include `judge` and `user` on `results.json`.
 
 | Argument / Option | Description |
 |---|---|

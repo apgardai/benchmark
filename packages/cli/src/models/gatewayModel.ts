@@ -30,11 +30,26 @@ function buildRetryOptions(
   };
 }
 
+/** Registry slugs that must use the Vercel AI gateway even when OPENAI_API_KEY is set. */
+const GATEWAY_ONLY_GPT_SLUGS = new Set(["gpt-4o"]);
+
 /** True when the registry slug or provider model id is an OpenAI GPT model. */
 function isGptModel(modelId: string, modelSlug: string): boolean {
   const id = modelId.toLowerCase();
   const slug = modelSlug.toLowerCase();
   return id.includes("gpt") || slug.includes("gpt");
+}
+
+function shouldUseOpenAiSdk(
+  modelSlug: string,
+  isGpt: boolean,
+  openaiClient: OpenAI | null
+): boolean {
+  return (
+    isGpt &&
+    openaiClient !== null &&
+    !GATEWAY_ONLY_GPT_SLUGS.has(modelSlug)
+  );
 }
 
 function toOpenAiModelId(modelId: string): string {
@@ -75,7 +90,7 @@ export function createGatewayModel(
   const retryOptions = buildRetryOptions(config.model, options);
   const isGpt = isGptModel(config.model, modelSlug);
   const openaiClient = isGpt ? createOpenAiClient() : null;
-  const useOpenAiSdk = isGpt && openaiClient !== null;
+  const useOpenAiSdk = shouldUseOpenAiSdk(modelSlug, isGpt, openaiClient);
 
   if (isGpt && !openaiClient) {
     console.warn(

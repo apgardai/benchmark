@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import {existsSync, readFileSync} from "node:fs";
-import {mkdir} from "node:fs/promises";
+import {mkdir, writeFile} from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import {spawn} from "node:child_process";
@@ -51,6 +51,18 @@ function loadModelRegistry() {
  * @param {string} slug
  * @param {string} roleLabel
  */
+function parsePromptsFromArgs(args) {
+  const idx = args.indexOf("--prompts");
+  if (idx === -1 || idx + 1 >= args.length) {
+    return ["default"];
+  }
+  const parts = args[idx + 1]
+    .split(",")
+    .map(s => s.trim())
+    .filter(s => s.length > 0);
+  return parts.length > 0 ? parts : ["default"];
+}
+
 function assertKnownGatewayModel(registry, slug, roleLabel) {
   if (!registry[slug]) {
     const available = Object.keys(registry).sort().join(", ");
@@ -86,8 +98,25 @@ if (!targetModel.startsWith("custom-")) {
 const modelDir = sanitizeModelForPath(targetModel);
 const outputDir = path.join("data", "model-results", modelDir);
 const outputPath = path.join(outputDir, "results.json");
+const runMetaPath = path.join(outputDir, "run-meta.json");
+const prompts = parsePromptsFromArgs(extraArgs);
 
 await mkdir(outputDir, {recursive: true});
+
+await writeFile(
+  runMetaPath,
+  `${JSON.stringify(
+    {
+      target_model: targetModel,
+      judge_model: judgeSlug,
+      user_model: userSlug,
+      prompts,
+      started_at: new Date().toISOString(),
+    },
+    null,
+    2
+  )}\n`
+);
 
 const cliArgs = [
   "--env-file=.env",
@@ -109,7 +138,30 @@ const child = spawn(process.execPath, cliArgs, {
   cwd: process.cwd(),
 });
 
-child.on("exit", code => process.exit(code ?? 1));
+child.on("exit", code => {
+  void (async () => {
+    try {
+      const finishedAt = new Date().toISOString();
+      const existing = JSON.parse(readFileSync(runMetaPath, "utf-8"));
+      await writeFile(
+        runMetaPath,
+        `${JSON.stringify(
+          {
+            ...existing,
+            finished_at: finishedAt,
+            status: code === 0 ? "completed" : "failed",
+            exit_code: code ?? 1,
+          },
+          null,
+          2
+        )}\n`
+      );
+    } catch {
+      // Best-effort; results.json still holds final metadata when the run succeeds.
+    }
+    process.exit(code ?? 1);
+  })();
+});
 child.on("error", err => {
   console.error(`Failed to start benchmark run: ${err.message}`);
   process.exit(1);

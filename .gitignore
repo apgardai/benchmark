@@ -27,6 +27,9 @@ pids
 *.pid.lock
 
 /data/.benchmark-*-tmp/**
+# In-progress ``yarn run:model`` checkpoints (leaderboard live preview)
+!/data/model-results/**/.benchmark-run-tmp/
+!/data/model-results/**/.benchmark-run-tmp/**
 /data/evaluation-workspaces/**
 /**/*.zip
 
