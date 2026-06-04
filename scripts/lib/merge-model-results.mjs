@@ -1,4 +1,4 @@
-import {createWriteStream, existsSync} from "node:fs";
+import {createWriteStream, existsSync, readdirSync, statSync} from "node:fs";
 import {
   copyFile,
   mkdir,
@@ -17,6 +17,143 @@ const require = createRequire(
 const archiver = require("archiver");
 
 export const MERGE_STAGING_DIRNAME = ".merge-staging";
+
+/**
+ * @param {string} filePath
+ */
+function hasNonEmptyFile(filePath) {
+  if (!existsSync(filePath)) {
+    return false;
+  }
+  try {
+    return statSync(filePath).size > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Canonical write paths (top-level under the model output dir).
+ *
+ * @param {string} outputDir
+ */
+export function canonicalResultsArtifacts(outputDir) {
+  return {
+    resultsJson: path.join(outputDir, "results.json"),
+    resultsZip: path.join(outputDir, "results.zip"),
+    testResultsDir: path.join(outputDir, "testResults"),
+  };
+}
+
+/**
+ * @param {string} outputDir
+ * @returns {string | null}
+ */
+function firstReadableResultsJsonPath(outputDir) {
+  for (const candidate of [
+    path.join(outputDir, "results.json"),
+    path.join(outputDir, "results", "results.json"),
+  ]) {
+    if (hasNonEmptyFile(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+/**
+ * @param {string} outputDir
+ * @returns {string | null}
+ */
+function firstReadableResultsZipPath(outputDir) {
+  for (const candidate of [
+    path.join(outputDir, "results.zip"),
+    path.join(outputDir, "results", "results.zip"),
+  ]) {
+    if (hasNonEmptyFile(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+/**
+ * @param {string} outputDir
+ * @returns {string | null}
+ */
+function firstReadableTestResultsDir(outputDir) {
+  for (const candidate of [
+    path.join(outputDir, "testResults"),
+    path.join(outputDir, "results", "testResults"),
+  ]) {
+    if (!existsSync(candidate)) {
+      continue;
+    }
+    try {
+      const names = readdirSync(candidate);
+      if (names.some(name => name.endsWith(".json"))) {
+        return candidate;
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return null;
+}
+
+/**
+ * @param {string} filePath
+ * @returns {Promise<Record<string, unknown> | null>}
+ */
+export async function readResultsJsonDocument(filePath) {
+  if (!hasNonEmptyFile(filePath)) {
+    return null;
+  }
+  const raw = (await readFile(filePath, "utf-8")).trim();
+  if (!raw) {
+    return null;
+  }
+  const parsed = JSON.parse(raw);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return null;
+  }
+  return /** @type {Record<string, unknown>} */ (parsed);
+}
+
+/**
+ * @param {string} zipPath
+ * @returns {Promise<Record<string, unknown> | null>}
+ */
+export async function readResultsJsonFromZip(zipPath) {
+  if (!hasNonEmptyFile(zipPath)) {
+    return null;
+  }
+  const {spawn} = await import("node:child_process");
+  const raw = await new Promise((resolve, reject) => {
+    const proc = spawn("unzip", ["-p", zipPath, "results.json"]);
+    let stdout = "";
+    proc.stdout.on("data", d => {
+      stdout += d.toString();
+    });
+    proc.on("error", reject);
+    proc.on("close", code => {
+      if (code !== 0) {
+        resolve("");
+        return;
+      }
+      resolve(stdout);
+    });
+  });
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const parsed = JSON.parse(trimmed);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return null;
+  }
+  return /** @type {Record<string, unknown>} */ (parsed);
+}
 
 /**
  * @param {string | null | undefined} prompt
@@ -180,27 +317,12 @@ export async function readTestResultsFromZip(zipPath) {
 }
 
 /**
+ * Top-level artifact paths used for writes after a run or merge.
+ *
  * @param {string} outputDir
  */
 export function resolveResultsArtifacts(outputDir) {
-  const candidates = [
-    {
-      resultsJson: path.join(outputDir, "results.json"),
-      resultsZip: path.join(outputDir, "results.zip"),
-      testResultsDir: path.join(outputDir, "testResults"),
-    },
-    {
-      resultsJson: path.join(outputDir, "results", "results.json"),
-      resultsZip: path.join(outputDir, "results", "results.zip"),
-      testResultsDir: path.join(outputDir, "results", "testResults"),
-    },
-  ];
-  for (const c of candidates) {
-    if (existsSync(c.resultsJson)) {
-      return c;
-    }
-  }
-  return candidates[0];
+  return canonicalResultsArtifacts(outputDir);
 }
 
 /**
@@ -214,34 +336,38 @@ export function mergeStagingDir(outputDir) {
  * @param {string} outputDir
  */
 export async function snapshotResultsForMerge(outputDir) {
-  const artifacts = resolveResultsArtifacts(outputDir);
   const staging = mergeStagingDir(outputDir);
   await rm(staging, {recursive: true, force: true});
   await mkdir(staging, {recursive: true});
 
+  const jsonSrc = firstReadableResultsJsonPath(outputDir);
+  const zipSrc = firstReadableResultsZipPath(outputDir);
+  const testResultsSrc = firstReadableTestResultsDir(outputDir);
+
   let snapshotted = false;
-  if (existsSync(artifacts.resultsJson)) {
-    await copyFile(
-      artifacts.resultsJson,
-      path.join(staging, "previous-results.json")
-    );
+  const previousJsonPath = path.join(staging, "previous-results.json");
+  if (jsonSrc) {
+    await copyFile(jsonSrc, previousJsonPath);
     snapshotted = true;
+  } else if (zipSrc) {
+    const doc = await readResultsJsonFromZip(zipSrc);
+    if (doc) {
+      await writeFile(previousJsonPath, `${JSON.stringify(doc, null, 2)}\n`);
+      snapshotted = true;
+    }
   }
-  if (existsSync(artifacts.resultsZip)) {
-    await copyFile(artifacts.resultsZip, path.join(staging, "previous-results.zip"));
+  if (zipSrc) {
+    await copyFile(zipSrc, path.join(staging, "previous-results.zip"));
     snapshotted = true;
-  } else if (existsSync(artifacts.testResultsDir)) {
+  } else if (testResultsSrc) {
     const dest = path.join(staging, "previous-testResults");
     await mkdir(dest, {recursive: true});
-    const names = await readdir(artifacts.testResultsDir);
+    const names = await readdir(testResultsSrc);
     for (const name of names) {
       if (!name.endsWith(".json")) {
         continue;
       }
-      await copyFile(
-        path.join(artifacts.testResultsDir, name),
-        path.join(dest, name)
-      );
+      await copyFile(path.join(testResultsSrc, name), path.join(dest, name));
     }
     snapshotted = true;
   }
@@ -259,11 +385,11 @@ export async function restoreResultsFromMergeStaging(outputDir) {
   const previousZip = path.join(staging, "previous-results.zip");
   const previousTestResults = path.join(staging, "previous-testResults");
 
-  if (existsSync(previousJson)) {
+  if (hasNonEmptyFile(previousJson)) {
     await mkdir(path.dirname(artifacts.resultsJson), {recursive: true});
     await copyFile(previousJson, artifacts.resultsJson);
   }
-  if (existsSync(previousZip)) {
+  if (hasNonEmptyFile(previousZip)) {
     await mkdir(path.dirname(artifacts.resultsZip), {recursive: true});
     await copyFile(previousZip, artifacts.resultsZip);
   } else if (existsSync(previousTestResults)) {
@@ -326,23 +452,21 @@ export async function rebuildResultsZip(
  * @param {readonly string[]} replacePrompts
  */
 export async function applyResultsMerge(outputDir, replacePrompts) {
-  const artifacts = resolveResultsArtifacts(outputDir);
+  const artifacts = canonicalResultsArtifacts(outputDir);
   const staging = mergeStagingDir(outputDir);
   const previousJsonPath = path.join(staging, "previous-results.json");
   const previousZipPath = path.join(staging, "previous-results.zip");
   const previousTestResultsDir = path.join(staging, "previous-testResults");
 
-  if (!existsSync(artifacts.resultsJson)) {
-    throw new Error(`Missing new results.json under ${outputDir}`);
+  let incoming = await readResultsJsonDocument(artifacts.resultsJson);
+  if (incoming == null) {
+    incoming = await readResultsJsonFromZip(artifacts.resultsZip);
+  }
+  if (incoming == null) {
+    throw new Error(`Missing or empty results.json under ${outputDir}`);
   }
 
-  const incomingRaw = await readFile(artifacts.resultsJson, "utf-8");
-  const incoming = JSON.parse(incomingRaw);
-
-  let existing = null;
-  if (existsSync(previousJsonPath)) {
-    existing = JSON.parse(await readFile(previousJsonPath, "utf-8"));
-  }
+  const existing = await readResultsJsonDocument(previousJsonPath);
 
   const merged =
     existing != null
@@ -354,7 +478,7 @@ export async function applyResultsMerge(outputDir, replacePrompts) {
 
   /** @type {Array<{ fileName: string, record: Record<string, unknown> }>} */
   let existingEntries = [];
-  if (existsSync(previousZipPath)) {
+  if (hasNonEmptyFile(previousZipPath)) {
     existingEntries = await readTestResultsFromZip(previousZipPath);
   } else if (existsSync(previousTestResultsDir)) {
     existingEntries = await readTestResultsDir(previousTestResultsDir);
@@ -362,10 +486,13 @@ export async function applyResultsMerge(outputDir, replacePrompts) {
 
   /** @type {Array<{ fileName: string, record: Record<string, unknown> }>} */
   let incomingEntries = [];
-  if (existsSync(artifacts.resultsZip)) {
+  if (hasNonEmptyFile(artifacts.resultsZip)) {
     incomingEntries = await readTestResultsFromZip(artifacts.resultsZip);
   } else {
-    incomingEntries = await readTestResultsDir(artifacts.testResultsDir);
+    const incomingTestResultsDir = firstReadableTestResultsDir(outputDir);
+    if (incomingTestResultsDir) {
+      incomingEntries = await readTestResultsDir(incomingTestResultsDir);
+    }
   }
 
   const mergedEntries = mergeTestResultEntries(
@@ -374,25 +501,12 @@ export async function applyResultsMerge(outputDir, replacePrompts) {
     replacePrompts
   );
 
-  const testResultsDir =
-    artifacts.testResultsDir ??
-    path.join(path.dirname(artifacts.resultsJson), "testResults");
-
   await rebuildResultsZip(
     artifacts.resultsJson,
-    testResultsDir,
+    artifacts.testResultsDir,
     mergedEntries,
     artifacts.resultsZip
   );
-
-  const topLevelJson = path.join(outputDir, "results.json");
-  if (artifacts.resultsJson !== topLevelJson) {
-    await writeFile(topLevelJson, `${JSON.stringify(merged, null, 2)}\n`);
-  }
-  const topLevelZip = path.join(outputDir, "results.zip");
-  if (artifacts.resultsZip !== topLevelZip && existsSync(artifacts.resultsZip)) {
-    await copyFile(artifacts.resultsZip, topLevelZip);
-  }
 
   await rm(staging, {recursive: true, force: true});
   return {merged, testCount: mergedEntries.length};
