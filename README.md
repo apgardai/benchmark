@@ -53,9 +53,12 @@ Run the benchmark for leaderboard models:
 yarn run:model <target-model>
 yarn run:model <target-model> [judge-model] [user-model]
 # e.g. yarn run:model grok-4.3 gpt-5.5:high:limited deepseek-v3.2
+yarn run:model gpt-4o --prompts child --merge
 ```
 
 Results land under `data/model-results/<target>/`. The script writes `run-meta.json` there immediately (target, judge, user, prompts) so the UI can show run configuration before `results.json` is finished. Completed runs also include `judge` and `user` on `results.json`.
+
+**`--merge`** — When re-running with additional prompt variants, pass `--merge` so only the prompts listed in `--prompts` are replaced in `results.json` and `results.zip`; other prompts (e.g. an existing `default` run) are kept. Example: after a full `default` benchmark, add child-aware results with `yarn run:model <target> --prompts child --merge`. Re-running `child` with `--merge` replaces the previous child scores and scenario files.
 
 | Argument / Option | Description |
 |---|---|

@@ -17,6 +17,7 @@
     "cs-bench": "node --env-file=.env ./packages/cli/build/src/cli.js",
     "cs-bench:env": "node --env-file=.env ./packages/cli/build/src/cli.js",
     "run:model": "node ./scripts/run-model-benchmark.mjs",
+    "test:merge": "node ./scripts/lib/merge-model-results.test.mjs && node ./scripts/lib/parse-run-model-argv.test.mjs",
     "results-viewer:archive": "cp data/results.json results-viewer/archived-results/ && rm -rf results-viewer/archived-results/testResults && cp -r data/results/testResults results-viewer/archived-results/ && echo Archived to results-viewer/archived-results/",
     "results-viewer:data": "node ./results-viewer/build-viewer-data.mjs",
     "results-viewer-next:dev": "npm --prefix ./results-viewer-next run dev",

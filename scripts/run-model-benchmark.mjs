@@ -4,11 +4,22 @@ import {mkdir, writeFile} from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import {spawn} from "node:child_process";
+import {
+  applyResultsMerge,
+  restoreResultsFromMergeStaging,
+  snapshotResultsForMerge,
+} from "./lib/merge-model-results.mjs";
+import {parseRunModelArgv} from "./lib/parse-run-model-argv.mjs";
 
 function printUsage() {
   console.error(
-    "Usage: yarn run:model <target-model> [judge-model] [user-model] [--prompts <csv>] [--input <path>]"
+    "Usage: yarn run:model <target-model> [judge-model] [user-model] [--prompts <csv>] [--merge] [--input <path>]"
   );
+}
+
+function stripMergeFlag(args) {
+  const merge = args.includes("--merge");
+  return {merge, cliArgs: args.filter(a => a !== "--merge")};
 }
 
 function sanitizeModelForPath(model) {
@@ -80,10 +91,8 @@ if (!targetModel) {
   process.exit(1);
 }
 
-const judgeModel = argv[1]?.startsWith("--") ? undefined : argv[1];
-const userModel = argv[2]?.startsWith("--") ? undefined : argv[2];
-const extraArgsStart = judgeModel ? (userModel ? 3 : 2) : 1;
-const extraArgs = argv.slice(extraArgsStart);
+const {judgeModel, userModel, extraArgs: parsedExtra} = parseRunModelArgv(argv.slice(1));
+const {merge, cliArgs: extraArgs} = stripMergeFlag(parsedExtra);
 
 const {registry} = loadModelRegistry();
 const judgeSlug = judgeModel ?? "gpt-5.2:high:limited";
@@ -102,6 +111,16 @@ const runMetaPath = path.join(outputDir, "run-meta.json");
 const prompts = parsePromptsFromArgs(extraArgs);
 
 await mkdir(outputDir, {recursive: true});
+
+let mergeSnapshotted = false;
+if (merge) {
+  mergeSnapshotted = await snapshotResultsForMerge(outputDir);
+  if (mergeSnapshotted) {
+    console.log(
+      `Merge enabled: keeping existing prompts other than [${prompts.join(", ")}] after this run.`
+    );
+  }
+}
 
 await writeFile(
   runMetaPath,
@@ -140,6 +159,7 @@ const child = spawn(process.execPath, cliArgs, {
 
 child.on("exit", code => {
   void (async () => {
+    const exitCode = code ?? 1;
     try {
       const finishedAt = new Date().toISOString();
       const existing = JSON.parse(readFileSync(runMetaPath, "utf-8"));
@@ -149,8 +169,9 @@ child.on("exit", code => {
           {
             ...existing,
             finished_at: finishedAt,
-            status: code === 0 ? "completed" : "failed",
-            exit_code: code ?? 1,
+            status: exitCode === 0 ? "completed" : "failed",
+            exit_code: exitCode,
+            merge,
           },
           null,
           2
@@ -159,7 +180,36 @@ child.on("exit", code => {
     } catch {
       // Best-effort; results.json still holds final metadata when the run succeeds.
     }
-    process.exit(code ?? 1);
+
+    if (merge && mergeSnapshotted) {
+      try {
+        if (exitCode === 0) {
+          const {testCount} = await applyResultsMerge(outputDir, prompts);
+          console.log(
+            `Merged run into ${outputDir} (${testCount} scenario files in archive).`
+          );
+        } else {
+          await restoreResultsFromMergeStaging(outputDir);
+          console.error(
+            "Benchmark failed; restored previous results from merge staging."
+          );
+        }
+      } catch (err) {
+        console.error(
+          `Merge failed: ${err instanceof Error ? err.message : String(err)}`
+        );
+        try {
+          await restoreResultsFromMergeStaging(outputDir);
+          console.error("Restored previous results from merge staging.");
+        } catch {
+          // ignore secondary failure
+        }
+        process.exit(1);
+        return;
+      }
+    }
+
+    process.exit(exitCode);
   })();
 });
 child.on("error", err => {
