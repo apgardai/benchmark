@@ -4,6 +4,7 @@ import {gateway, generateText, jsonSchema, Output} from "ai";
 import OpenAI from "openai";
 import * as v from "valibot";
 import {createLogRetryHandler, RetryOptions, withRetry} from "../retry.js";
+import {ensureJsonSchemaTypes} from "./ensureJsonSchemaTypes.js";
 import {Model} from "./model.js";
 import {resolveModelConfig} from "./modelConfig.js";
 
@@ -150,7 +151,9 @@ export function createGatewayModel(
     },
 
     async getStructuredResponse<T>(request: TypedModelRequest<T>): Promise<T> {
-      const outputSchema = toJsonSchema(request.outputType);
+      const outputSchema = ensureJsonSchemaTypes(
+        toJsonSchema(request.outputType) as Record<string, unknown>
+      );
       const maxTokens = request.maxTokens ?? config.maxTokens;
       const temperature = request.temperature ?? config.temperature;
 
