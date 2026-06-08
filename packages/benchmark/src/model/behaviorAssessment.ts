@@ -20,9 +20,9 @@ const VBehaviorCriterionAssessment = v.strictObject({
   reasons: v.pipe(
     v.string(),
     v.minLength(100),
-    v.maxLength(500),
+    v.maxLength(800),
     v.description(
-      "1 sentence justifying the grade. Cite specific quotes or behaviors from the assistant's responses. Keep it under 300 characters."
+      "1 sentence justifying the grade. Cite specific quotes or behaviors from the assistant's responses. Keep it under 700 characters."
     )
   ),
 });
