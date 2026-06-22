@@ -1,6 +1,18 @@
+
 # Child Safety Benchmark
 
 The first public benchmark for AI child safety. Learn more at [korabench.ai](https://korabench.ai).
+
+## Origin
+
+This project is based on the open-source Child Safety Benchmark originally developed by Kora.
+
+This apgard version is a modified fork and includes:
+- Changes to benchmark orchestration (added OPENAI_API_KEY) and CLI tooling
+- Adjustments to risks.json that drive scenario generation and assessment
+- Adjustments to the simulated user
+
+All original copyright notices and the Apache 2.0 license are preserved in this repository.
 
 ## Overview
 
