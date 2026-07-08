@@ -1,5 +1,11 @@
 /** CLI flags that consume the following argv token (not positional models). */
-const FLAGS_WITH_VALUE = new Set(["--prompts", "--input", "-i", "-o"]);
+const FLAGS_WITH_VALUE = new Set([
+  "--prompts",
+  "--input",
+  "-i",
+  "-o",
+  "--benchmark",
+]);
 
 /**
  * Split optional judge/user models from flags (e.g. `--prompts default,child`).

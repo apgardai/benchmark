@@ -273,7 +273,9 @@ export async function runCommand(
   }
 
   // Write reduced result.
+  const benchmarkId = process.env.BENCHMARK_ID?.trim() || "wellbeing";
   const result = {
+    benchmark: benchmarkId,
     target: targetModelSlug,
     judge: judgeModelSlug,
     user: userModelSlug,

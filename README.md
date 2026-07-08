@@ -32,20 +32,20 @@ Each test is a 3-turn conversation between a simulated child user and the target
 
 Install dependencies and build:
 
-```bash
+```
 cp .env.example .env   # then add your API key
 yarn && yarn tsbuild
 ```
 
 Run the benchmark with pre-built scenarios:
 
-```bash
+```
 yarn cs-bench run <target-model>
 ```
 
 For example, to evaluate `gpt-4o`:
 
-```bash
+```
 yarn cs-bench run gpt-4o
 ```
 
@@ -55,20 +55,30 @@ yarn cs-bench run gpt-4o
 
 Generates a set of scenario seeds from the risk taxonomy.
 
-```bash
+```
 yarn cs-bench generate-seeds [model]
 ```
 
 Run the benchmark for leaderboard models:
 
-```bash
+```
 yarn run:model <target-model>
 yarn run:model <target-model> [judge-model] [user-model]
 # e.g. yarn run:model grok-4.3 gpt-5.5:high:limited deepseek-v3.2
 yarn run:model gpt-4o --prompts child --merge
 ```
 
-Results land under `data/model-results/<target>/`. The script writes `run-meta.json` there immediately (target, judge, user, prompts) so the UI can show run configuration before `results.json` is finished. Completed runs also include `judge` and `user` on `results.json`.
+Results land under `data/model-results/<target>/` (wellbeing) or `data/csea-model-results/<target>/` (CSEA). Use `--benchmark` to select the variant:
+
+```
+# Youth mental wellbeing (default; preserves existing model-results/)
+yarn run:model gpt-4o
+
+# CSEA benchmark
+yarn run:model gpt-4o --benchmark csea
+```
+
+The script writes `run-meta.json` there immediately (target, judge, user, prompts, benchmark) so the UI can show run configuration before `results.json` is finished. Completed runs also include `judge` and `user` on `results.json`.
 
 **`--merge`** — When re-running with additional prompt variants, pass `--merge` so only the prompts listed in `--prompts` are replaced in `results.json` and `results.zip`; other prompts (e.g. an existing `default` run) are kept. Example: after a full `default` benchmark, add child-aware results with `yarn run:model <target> --prompts child --merge`. Re-running `child` with `--merge` replaces the previous child scores and scenario files.
 
@@ -118,7 +128,7 @@ All commands write to `data/` by default. Commands are restartable — progress 
 
 Models are configured in a `models.json` file at the project root. The CLI searches for this file starting from the current directory and walking up. Each entry maps a **model slug** (used on the command line) to its configuration:
 
-```json
+```
 {
   "gpt-5.2:high": {
     "model": "openai/gpt-5.2",
@@ -151,7 +161,7 @@ Model slugs that start with `custom-` bypass the AI SDK gateway and are routed t
 
 To add a custom model, edit `models/customModel.ts` and implement the `Model` interface:
 
-```ts
+```
 export async function createCustomModel(modelSlug: string, _scenario: Scenario): Promise<Model> {
   return {
     async getTextResponse(request) {
@@ -180,7 +190,7 @@ A new `Model` instance is created per scenario, so you can use the scenario data
 
 Then use the slug on the command line like any other model:
 
-```bash
+```
 yarn cs-bench run custom-my-model
 ```
 
@@ -215,7 +225,7 @@ In addition to safety, each conversation is assessed on three behavioral criteri
 
 The `run` command produces a result object with this structure:
 
-```json
+```
 {
   "target": "gpt-4o",
   "judge": "gpt-5.2:high:limited",
@@ -298,7 +308,7 @@ packages/
 
 ## Development
 
-```bash
+```
 yarn tsbuild      # Type check
 yarn test          # Run tests
 yarn lint          # Lint

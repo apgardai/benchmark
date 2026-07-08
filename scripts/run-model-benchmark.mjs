@@ -5,6 +5,10 @@ import path from "node:path";
 import process from "node:process";
 import {spawn} from "node:child_process";
 import {
+  defaultBenchmarkId,
+  resolveBenchmark,
+} from "./lib/benchmark-config.mjs";
+import {
   applyResultsMerge,
   restoreResultsFromMergeStaging,
   snapshotResultsForMerge,
@@ -13,13 +17,23 @@ import {parseRunModelArgv} from "./lib/parse-run-model-argv.mjs";
 
 function printUsage() {
   console.error(
-    "Usage: yarn run:model <target-model> [judge-model] [user-model] [--prompts <csv>] [--merge] [--input <path>]"
+    "Usage: yarn run:model <target-model> [judge-model] [user-model] [--benchmark wellbeing|csea] [--prompts <csv>] [--merge] [--input <path>]"
   );
 }
 
 function stripMergeFlag(args) {
   const merge = args.includes("--merge");
   return {merge, cliArgs: args.filter(a => a !== "--merge")};
+}
+
+function parseBenchmarkFromArgs(args) {
+  const idx = args.indexOf("--benchmark");
+  if (idx === -1 || idx + 1 >= args.length) {
+    return {benchmarkId: defaultBenchmarkId(), cliArgs: args};
+  }
+  const benchmarkId = args[idx + 1].trim();
+  const cliArgs = [...args.slice(0, idx), ...args.slice(idx + 2)];
+  return {benchmarkId, cliArgs};
 }
 
 function sanitizeModelForPath(model) {
@@ -57,11 +71,6 @@ function loadModelRegistry() {
   return {modelsPath, registry: /** @type {Record<string, unknown>} */ (parsed)};
 }
 
-/**
- * @param {Record<string, unknown>} registry
- * @param {string} slug
- * @param {string} roleLabel
- */
 function parsePromptsFromArgs(args) {
   const idx = args.indexOf("--prompts");
   if (idx === -1 || idx + 1 >= args.length) {
@@ -72,6 +81,10 @@ function parsePromptsFromArgs(args) {
     .map(s => s.trim())
     .filter(s => s.length > 0);
   return parts.length > 0 ? parts : ["default"];
+}
+
+function hasInputFlag(args) {
+  return args.some(a => a === "--input" || a === "-i");
 }
 
 function assertKnownGatewayModel(registry, slug, roleLabel) {
@@ -91,8 +104,20 @@ if (!targetModel) {
   process.exit(1);
 }
 
-const {judgeModel, userModel, extraArgs: parsedExtra} = parseRunModelArgv(argv.slice(1));
-const {merge, cliArgs: extraArgs} = stripMergeFlag(parsedExtra);
+const {judgeModel, userModel, extraArgs: parsedExtra} = parseRunModelArgv(
+  argv.slice(1)
+);
+const {merge, cliArgs: mergeStrippedArgs} = stripMergeFlag(parsedExtra);
+const {benchmarkId, cliArgs: benchmarkStrippedArgs} =
+  parseBenchmarkFromArgs(mergeStrippedArgs);
+
+let benchmark;
+try {
+  benchmark = resolveBenchmark(benchmarkId);
+} catch (err) {
+  console.error(err instanceof Error ? err.message : String(err));
+  process.exit(1);
+}
 
 const {registry} = loadModelRegistry();
 const judgeSlug = judgeModel ?? "gpt-5.2:high:limited";
@@ -105,10 +130,14 @@ if (!targetModel.startsWith("custom-")) {
 }
 
 const modelDir = sanitizeModelForPath(targetModel);
-const outputDir = path.join("data", "model-results", modelDir);
+const outputDir = path.join(benchmark.resultsDirPath, modelDir);
 const outputPath = path.join(outputDir, "results.json");
 const runMetaPath = path.join(outputDir, "run-meta.json");
-const prompts = parsePromptsFromArgs(extraArgs);
+const prompts = parsePromptsFromArgs(benchmarkStrippedArgs);
+
+const inputArgs = hasInputFlag(benchmarkStrippedArgs)
+  ? []
+  : ["-i", benchmark.scenariosPath];
 
 await mkdir(outputDir, {recursive: true});
 
@@ -126,6 +155,7 @@ await writeFile(
   runMetaPath,
   `${JSON.stringify(
     {
+      benchmark: benchmark.id,
       target_model: targetModel,
       judge_model: judgeSlug,
       user_model: userSlug,
@@ -146,15 +176,21 @@ const cliArgs = [
   userModel ?? "deepseek-v3.2",
   "-o",
   outputPath,
-  ...extraArgs,
+  ...inputArgs,
+  ...benchmarkStrippedArgs,
 ];
 
-console.log(`Running benchmark for "${targetModel}"`);
+console.log(`Running ${benchmark.label} benchmark for "${targetModel}"`);
 console.log(`Saving results to ${outputDir}`);
 
 const child = spawn(process.execPath, cliArgs, {
   stdio: "inherit",
   cwd: process.cwd(),
+  env: {
+    ...process.env,
+    BENCHMARK_ID: benchmark.id,
+    BENCHMARK_RISKS_FILE: benchmark.risksPath,
+  },
 });
 
 child.on("exit", code => {

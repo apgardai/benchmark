@@ -1,8 +1,21 @@
 import {memoize} from "@korabench/core";
+import {existsSync, readFileSync} from "node:fs";
+import {resolve} from "node:path";
 import * as R from "remeda";
 import * as v from "valibot";
-import risks from "../../data/risks.json" with {type: "json"};
+import defaultRisks from "../../data/risks.json" with {type: "json"};
 import {Risk} from "./risk.js";
+
+function loadRisksData() {
+  const override = process.env.BENCHMARK_RISKS_FILE?.trim();
+  if (override) {
+    const path = resolve(override);
+    if (existsSync(path)) {
+      return JSON.parse(readFileSync(path, "utf-8")) as unknown;
+    }
+  }
+  return defaultRisks;
+}
 
 //
 // Runtime model.
@@ -20,7 +33,7 @@ const VRiskCategory = v.object({
 
 const listAll = memoize(() => {
   const type = v.pipe(v.array(VRiskCategory), v.readonly());
-  return v.parse(type, risks);
+  return v.parse(type, loadRisksData());
 });
 
 function find(riskCategoryId: string) {
