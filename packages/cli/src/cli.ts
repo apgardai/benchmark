@@ -114,7 +114,7 @@ program
   .command("run")
   .description("run the benchmark with the provided scenarios")
   .argument("<target-model>", "model to benchmark")
-  .argument("[judge-model]", "model to use as judge", "gpt-5.2:high:limited")
+  .argument("[judge-model]", "model to use as judge", "gpt-5.2:medium:limited")
   .argument(
     "[user-model]",
     "model to use for user message generation",

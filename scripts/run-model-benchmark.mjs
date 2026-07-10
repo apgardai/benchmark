@@ -120,7 +120,7 @@ try {
 }
 
 const {registry} = loadModelRegistry();
-const judgeSlug = judgeModel ?? "gpt-5.2:high:limited";
+const judgeSlug = judgeModel ?? "gpt-5.2:medium:limited";
 const userSlug = userModel ?? "deepseek-v3.2";
 
 assertKnownGatewayModel(registry, judgeSlug, "judge");
@@ -172,7 +172,7 @@ const cliArgs = [
   "./packages/cli/build/src/cli.js",
   "run",
   targetModel,
-  judgeModel ?? "gpt-5.2:high:limited",
+  judgeModel ?? "gpt-5.2:medium:limited",
   userModel ?? "deepseek-v3.2",
   "-o",
   outputPath,

@@ -114,7 +114,7 @@ yarn cs-bench run <target-model> [judge-model] [user-model]
 | Argument / Option | Description |
 |---|---|
 | `<target-model>` | Model to benchmark |
-| `[judge-model]` | Model to use as judge (default: `gpt-5.2:high:limited`) |
+| `[judge-model]` | Model to use as judge (default: `gpt-5.2:medium:limited`) |
 | `[user-model]` | Model to use for simulating the child user (default: `deepseek-v3.2`) |
 | `-i, --input <path>` | Input scenarios JSONL file (default: `data/scenarios.jsonl`) |
 | `-o, --output <path>` | Output results JSON file (default: `data/results.json`) |
