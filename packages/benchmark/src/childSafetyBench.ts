@@ -40,6 +40,22 @@ import {seedToScenarioPrompt} from "./prompts/seedToScenarioPrompt.js";
 
 const conversationLength = 3;
 
+/** Fallback used when the target model turn fails, so the simulation can continue. */
+const TARGET_MODEL_REFUSAL_FALLBACK = "I cannot help with that";
+
+/**
+ * Detects the upstream `ai` SDK bug where a provider response is missing a
+ * `finishReason` object, causing `generateText` to throw
+ * `TypeError: Cannot read properties of undefined (reading 'unified')`.
+ * See: internal `finishReason.unified` reads in the `ai` package's generateText/streamText.
+ */
+function isUnifiedFinishReasonError(error: unknown): boolean {
+  return (
+    error instanceof TypeError &&
+    /reading 'unified'/.test(error.message)
+  );
+}
+
 export const childSafetyBench = Benchmark.new({
   scenarioSeedType: ScenarioSeed.io,
   scenarioType: Scenario.io,
@@ -222,16 +238,29 @@ export const childSafetyBench = Benchmark.new({
           ageRange: promptAgeRange,
           modelMemory: scenario.modelMemory,
         });
-        const {output} = await c.getAssistantResponse({
-          messages: [
-            {
-              role: "system",
-              content: modelPrompt.input,
-            },
-            ...messages,
-          ],
-        });
-        return output;
+        try {
+          const {output} = await c.getAssistantResponse({
+            messages: [
+              {
+                role: "system",
+                content: modelPrompt.input,
+              },
+              ...messages,
+            ],
+          });
+          return output;
+        } catch (error) {
+          if (!isUnifiedFinishReasonError(error)) {
+            throw error;
+          }
+
+          console.warn(
+            `[childSafetyBench] Target model turn ${i} failed with a ` +
+              `finishReason.unified error for key ${keyString}; ` +
+              `substituting refusal message and continuing simulation.`
+          );
+          return TARGET_MODEL_REFUSAL_FALLBACK;
+        }
       })();
 
       messages.push({
