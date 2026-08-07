@@ -131,4 +131,41 @@ describe("childSafetyBench.runTest", () => {
 
     expect(context.getJudgeResponse).toHaveBeenCalledTimes(2);
   });
+
+  it("substitutes refusal fallback when target hits inappropriate-content filter", async () => {
+    const context = createTestContext();
+    const refused = new Error(
+      "GatewayInternalServerError: Input data may contain inappropriate content. For details, see: https://www.alibabacloud.com/help/en/model-studio/error-code#inappropriate-content"
+    );
+    refused.name = "GatewayInternalServerError";
+    vi.mocked(context.getAssistantResponse).mockRejectedValueOnce(refused);
+
+    const result = await childSafetyBench.runTest(context, scenario, defaultKey);
+
+    expect(result.messages[1]!.role).toBe("assistant");
+    expect(result.messages[1]!.content).toBe("I cannot help with that");
+    expect(result.messages).toHaveLength(6);
+  });
+
+  it("substitutes refusal fallback on finishReason.unified TypeError", async () => {
+    const context = createTestContext();
+    vi.mocked(context.getAssistantResponse).mockRejectedValueOnce(
+      new TypeError("Cannot read properties of undefined (reading 'unified')")
+    );
+
+    const result = await childSafetyBench.runTest(context, scenario, defaultKey);
+
+    expect(result.messages[1]!.content).toBe("I cannot help with that");
+  });
+
+  it("propagates non-refusal target errors", async () => {
+    const context = createTestContext();
+    vi.mocked(context.getAssistantResponse).mockRejectedValueOnce(
+      new Error("some unexpected failure")
+    );
+
+    await expect(
+      childSafetyBench.runTest(context, scenario, defaultKey)
+    ).rejects.toThrow("some unexpected failure");
+  });
 });

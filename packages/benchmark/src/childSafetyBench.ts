@@ -56,6 +56,24 @@ function isUnifiedFinishReasonError(error: unknown): boolean {
   );
 }
 
+/**
+ * Provider/gateway content blocks that should not fail the whole test.
+ * Includes Gemini/AI SDK empty finishReason and Alibaba/Qwen inappropriate-content rejects.
+ */
+function isTargetModelRefusalFallbackError(error: unknown): boolean {
+  if (isUnifiedFinishReasonError(error)) {
+    return true;
+  }
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("inappropriate content") ||
+    message.includes("input data may contain inappropriate content")
+  );
+}
+
 export const childSafetyBench = Benchmark.new({
   scenarioSeedType: ScenarioSeed.io,
   scenarioType: Scenario.io,
@@ -250,14 +268,15 @@ export const childSafetyBench = Benchmark.new({
           });
           return output;
         } catch (error) {
-          if (!isUnifiedFinishReasonError(error)) {
+          if (!isTargetModelRefusalFallbackError(error)) {
             throw error;
           }
 
+          const detail =
+            error instanceof Error ? error.message : String(error);
           console.warn(
-            `[childSafetyBench] Target model turn ${i} failed with a ` +
-              `finishReason.unified error for key ${keyString}; ` +
-              `substituting refusal message and continuing simulation.`
+            `[childSafetyBench] Target model turn ${i} blocked/failed for key ${keyString}; ` +
+              `substituting refusal message and continuing simulation. (${detail})`
           );
           return TARGET_MODEL_REFUSAL_FALLBACK;
         }

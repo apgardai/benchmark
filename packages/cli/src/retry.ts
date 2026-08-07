@@ -36,6 +36,15 @@ function isRetryableError(error: unknown): boolean {
   const message = error.message.toLowerCase();
   const name = error.name.toLowerCase();
 
+  // Content filters (e.g. Alibaba/Qwen GatewayInternalServerError + inappropriate content).
+  // These are permanent for the payload — retrying only burns time.
+  if (
+    message.includes("inappropriate content") ||
+    message.includes("input data may contain inappropriate content")
+  ) {
+    return false;
+  }
+
   // Rate limiting
   if (message.includes("429") || message.includes("rate limit")) {
     return true;
