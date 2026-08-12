@@ -9,7 +9,7 @@ import {ScenarioSeed} from "../model/scenarioSeed.js";
 const motivation = Motivation.listAll()[0]!;
 // export const testRiskCategoryId = "physical_and_legal_safety";
 //export const testRiskId = "violence_and_physical_harm";
-export const testRiskCategoryId = "age_inappropriate_sexual_content";
+export const testRiskCategoryId = "adult_sexual_content_exposure";
 export const testRiskId = "explicit_sex_education";
 export const testMotivation = motivation;
 export const testAgeRange = "10to12" as const;
